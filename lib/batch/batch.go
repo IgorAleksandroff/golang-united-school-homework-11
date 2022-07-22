@@ -15,26 +15,28 @@ func getOne(id int64) user {
 }
 
 func getBatch(n int64, pool int64) (res []user) {
-	users := make([]user, n)
+	users := make([]user, 0, n)
 	jobs := make(chan int64, pool)
 	wg := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
 
 	wg.Add(int(n))
-
 	for i := int64(0); i < pool; i++ {
-		go worker(jobs, users, wg)
+		go func() {
+			for j := range jobs {
+				detectedUser := getOne(j)
+				mu.Lock()
+				users = append(users, detectedUser)
+				mu.Unlock()
+				wg.Done()
+			}
+		}()
 	}
 
 	for i := int64(0); i < n; i++ {
 		jobs <- i
 	}
+	close(jobs)
 	wg.Wait()
 	return users
-}
-
-func worker(jobs <-chan int64, result []user, wg *sync.WaitGroup) {
-	for j := range jobs {
-		result[j] = getOne(j)
-		wg.Done()
-	}
 }
