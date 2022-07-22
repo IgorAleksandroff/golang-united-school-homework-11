@@ -16,18 +16,25 @@ func getOne(id int64) user {
 
 func getBatch(n int64, pool int64) (res []user) {
 	users := make([]user, n)
-	semaphore := make(chan struct{}, pool)
+	jobs := make(chan int64, pool)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(int(n))
+
+	for i := int64(0); i < pool; i++ {
+		go worker(jobs, users, wg)
+	}
+
 	for i := int64(0); i < n; i++ {
-		semaphore <- struct{}{}
-		go func(index int64) {
-			defer wg.Done()
-			users[index] = getOne(index)
-			<-semaphore
-		}(i)
+		jobs <- i
 	}
 	wg.Wait()
 	return users
+}
+
+func worker(jobs <-chan int64, result []user, wg *sync.WaitGroup) {
+	for j := range jobs {
+		result[j] = getOne(j)
+		wg.Done()
+	}
 }
