@@ -1,6 +1,7 @@
 package batch
 
 import (
+	"sync"
 	"time"
 )
 
@@ -14,27 +15,19 @@ func getOne(id int64) user {
 }
 
 func getBatch(n int64, pool int64) (res []user) {
-	jobs := make(chan int64, n)
-	results := make(chan user, n)
-	users := make([]user, 0, n)
+	users := make([]user, n)
+	semaphore := make(chan struct{}, pool)
+	wg := &sync.WaitGroup{}
 
-	for w := int64(1); w <= pool; w++ {
-		go worker(jobs, results)
+	wg.Add(int(n))
+	for i := int64(0); i < n; i++ {
+		semaphore <- struct{}{}
+		go func(index int64) {
+			defer wg.Done()
+			users[index] = getOne(index)
+			<-semaphore
+		}(i)
 	}
-
-	for j := int64(0); j < n; j++ {
-		jobs <- j
-	}
-	close(jobs)
-	for a := int64(1); a <= n; a++ {
-		detestedUser := <-results
-		users = append(users, detestedUser)
-	}
+	wg.Wait()
 	return users
-}
-
-func worker(jobs <-chan int64, results chan<- user) {
-	for j := range jobs {
-		results <- getOne(j)
-	}
 }
